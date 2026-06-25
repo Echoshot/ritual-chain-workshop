@@ -1,6 +1,6 @@
 #!/bin/bash
-WEBHOOK_URL="https://discord.com/api/webhooks/1519528402527457382/YpiUYY98pFhGAkAqBilhP0fLTSuOc3auMEM3LDeYEldHKc54ZrnmDzPWbhnnSJhcmC99"
-OPENROUTER_API_KEY="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"
+WEBHOOK_URL="$DISCORD_WEBHOOK"
+OPENROUTER_API_KEY="$OPENROUTER_API_KEY"
 
 GOLD=$(curl -s "https://api.coinbase.com/v2/prices/XAU-USD/spot" | grep -o '"amount":"[^"]*"' | cut -d'"' -f4)
 echo "Gold price fetched: $GOLD"
