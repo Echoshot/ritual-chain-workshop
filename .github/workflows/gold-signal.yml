@@ -9,8 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Install jq
+        run: sudo apt-get install -y jq
       - name: Run Wave Analyzer
         env:
-          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_KEY }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: bash trader/wave_analyzer.sh
