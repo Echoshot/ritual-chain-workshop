@@ -5,20 +5,44 @@ OPENROUTER_API_KEY="$OPENROUTER_API_KEY"
 GOLD=$(curl -s "https://api.coinbase.com/v2/prices/XAU-USD/spot" | grep -o '"amount":"[^"]*"' | cut -d'"' -f4)
 echo "Gold price fetched: $GOLD"
 
-ANALYSIS=$(curl -s "https://openrouter.ai/api/v1/chat/completions" \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{\"model\":\"google/gemma-4-31b-it:free\",\"messages\":[{\"role\":\"user\",\"content\":\"Analyze XAU gold price ${GOLD} using SMC. Give SETUP GRADE, BIAS, ENTRY, SL, TP, WAVE COUNT, REASON.\"}]}" \
-  | jq -r '.choices[0].message.content')
+python3 << PYEOF
+import json, subprocess, os
 
-echo "$ANALYSIS" > /tmp/analysis.txt
+gold = "$GOLD"
+webhook = os.environ.get("DISCORD_WEBHOOK", "")
+api_key = os.environ.get("OPENROUTER_API_KEY", "")
 
-python3 -c "
-import json, subprocess
-gold = '$GOLD'
-webhook = '$WEBHOOK_URL'
-analysis = open('/tmp/analysis.txt').read()
-analysis_short = analysis[:1800]; payload = json.dumps({'content': '**Gold Signal** Price: \$' + gold + '\n\n' + analysis_short})
-subprocess.run(['curl','-s','-X','POST',webhook,'-H','Content-Type: application/json','-d',payload])
-print('Posted!')
-"
+payload = {
+    "model": "openrouter/auto",
+    "max_tokens": 1000,
+    "messages": [{
+        "role": "user",
+        "content": f"You are an SMC trader. XAU/USD live price is {gold}. Give: SETUP GRADE, BIAS, ENTRY, SL, TP1 TP2 TP3, WAVE COUNT, REASONING. Be concise."
+    }]
+}
+
+result = subprocess.run(
+    ["curl", "-s", "https://openrouter.ai/api/v1/chat/completions",
+     "-H", f"Authorization: Bearer {api_key}",
+     "-H", "Content-Type: application/json",
+     "-d", json.dumps(payload)],
+    capture_output=True, text=True
+)
+
+response = json.loads(result.stdout)
+print("MODEL USED:", response.get("model", "unknown"))
+
+if "choices" in response:
+    analysis = response["choices"][0]["message"]["content"][:1800]
+else:
+    analysis = f"Error: {response.get('error', {}).get('message', str(response))}"
+
+discord_payload = json.dumps({
+    "content": f"**🥇 Gold SMC Analysis**\n💲 Live Price: \${gold}\n\n{analysis}"
+})
+
+subprocess.run(["curl", "-s", "-X", "POST", webhook,
+                "-H", "Content-Type: application/json",
+                "-d", discord_payload])
+print("Posted!")
+PYEOF
