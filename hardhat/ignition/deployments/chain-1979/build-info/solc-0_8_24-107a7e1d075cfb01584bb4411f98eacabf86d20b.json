@@ -1,0 +1,49 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_24-107a7e1d075cfb01584bb4411f98eacabf86d20b",
+  "solcVersion": "0.8.24",
+  "solcLongVersion": "0.8.24+commit.e11b9ed9",
+  "compilerType": "solc",
+  "toolVersions": {
+    "hardhat": "3.9.0"
+  },
+  "userSourceNameMap": {
+    "contracts/agent/GoldSignalAgent.sol": "project/contracts/agent/GoldSignalAgent.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "shanghai",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode.linkReferences",
+            "evm.bytecode.object",
+            "evm.bytecode.opcodes",
+            "evm.bytecode.sourceMap",
+            "evm.deployedBytecode.immutableReferences",
+            "evm.deployedBytecode.linkReferences",
+            "evm.deployedBytecode.object",
+            "evm.deployedBytecode.opcodes",
+            "evm.deployedBytecode.sourceMap",
+            "evm.methodIdentifiers"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/agent/GoldSignalAgent.sol": {
+        "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.24;\n\ninterface ILLMPrecompile {\n    function requestInference(\n        string calldata model,\n        string calldata prompt,\n        uint256 maxTokens\n    ) external returns (bytes32 requestId);\n}\n\ninterface IScheduler {\n    function schedule(\n        address target,\n        bytes calldata data,\n        uint256 intervalBlocks\n    ) external returns (bytes32 jobId);\n}\n\ninterface IRitualWallet {\n    function deposit(uint256 lockDuration) external payable;\n}\n\ncontract GoldSignalAgent {\n    address constant LLM = 0x0000000000000000000000000000000000000802;\n    address constant SCHEDULER = 0x0000000000000000000000000000000000000820;\n    address constant RITUAL_WALLET = 0x0000000000000000000000000000000000000810;\n\n    address public owner;\n    uint256 public signalCount;\n\n    struct Signal {\n        uint256 timestamp;\n        string goldPrice;\n        string bias;\n        string setupGrade;\n        string entry;\n        string stopLoss;\n        string tp1;\n        string tp2;\n        string tp3;\n        string waveCount;\n        string rawAnalysis;\n        bool fulfilled;\n    }\n\n    mapping(uint256 => Signal) public signals;\n    mapping(bytes32 => uint256) public requestToSignal;\n\n    event SignalRequested(uint256 indexed signalId, bytes32 requestId, string goldPrice);\n    event SignalGenerated(\n        uint256 indexed signalId,\n        string bias,\n        string setupGrade,\n        string entry,\n        string stopLoss,\n        string waveCount\n    );\n    event AgentSpawned(address indexed agent, address indexed owner);\n\n    constructor() payable {\n        owner = msg.sender;\n        if (msg.value > 0) {\n            IRitualWallet(RITUAL_WALLET).deposit{value: msg.value}(30 days);\n        }\n        emit AgentSpawned(address(this), msg.sender);\n    }\n\n    function requestSignal(string calldata goldPrice) external returns (uint256) {\n        uint256 id = signalCount++;\n        signals[id] = Signal({\n            timestamp: block.timestamp,\n            goldPrice: goldPrice,\n            bias: \"\",\n            setupGrade: \"\",\n            entry: \"\",\n            stopLoss: \"\",\n            tp1: \"\",\n            tp2: \"\",\n            tp3: \"\",\n            waveCount: \"\",\n            rawAnalysis: \"\",\n            fulfilled: false\n        });\n\n        string memory prompt = buildPrompt(goldPrice);\n        bytes32 reqId = ILLMPrecompile(LLM).requestInference(\n            \"llama-3.1-8b\",\n            prompt,\n            512\n        );\n\n        requestToSignal[reqId] = id;\n        emit SignalRequested(id, reqId, goldPrice);\n        return id;\n    }\n\n    function buildPrompt(string memory goldPrice) internal pure returns (string memory) {\n        return string(abi.encodePacked(\n            \"You are an Elliott Wave + SMC expert analyzing XAU/USD. \",\n            \"Current gold price: $\", goldPrice, \". \",\n            \"Apply strict Elliott Wave rules: motive waves (1,3,5) subdivide into 5, \",\n            \"corrective waves (2,4) subdivide into 3. Wave 2 never retraces beyond wave 1 start. \",\n            \"Wave 3 is never the shortest. Wave 4 never overlaps wave 1 territory. \",\n            \"Reply in this exact format only: \",\n            \"GRADE:A|BIAS:Bullish|WAVE:3of5|ENTRY:2650|SL:2620|TP1:2700|TP2:2750|TP3:2800\"\n        ));\n    }\n\n    function onResult(bytes32 requestId, bytes calldata result) external {\n        uint256 signalId = requestToSignal[requestId];\n        Signal storage s = signals[signalId];\n        require(!s.fulfilled, \"Already fulfilled\");\n\n        string memory raw = string(result);\n        s.rawAnalysis = raw;\n        s.fulfilled = true;\n\n        // Parse the structured response\n        s.setupGrade = _extract(raw, \"GRADE:\");\n        s.bias = _extract(raw, \"BIAS:\");\n        s.waveCount = _extract(raw, \"WAVE:\");\n        s.entry = _extract(raw, \"ENTRY:\");\n        s.stopLoss = _extract(raw, \"SL:\");\n        s.tp1 = _extract(raw, \"TP1:\");\n        s.tp2 = _extract(raw, \"TP2:\");\n        s.tp3 = _extract(raw, \"TP3:\");\n\n        emit SignalGenerated(signalId, s.bias, s.setupGrade, s.entry, s.stopLoss, s.waveCount);\n    }\n\n    function _extract(string memory src, string memory key) internal pure returns (string memory) {\n        bytes memory srcBytes = bytes(src);\n        bytes memory keyBytes = bytes(key);\n        for (uint i = 0; i < srcBytes.length - keyBytes.length; i++) {\n            bool found = true;\n            for (uint j = 0; j < keyBytes.length; j++) {\n                if (srcBytes[i + j] != keyBytes[j]) { found = false; break; }\n            }\n            if (found) {\n                uint start = i + keyBytes.length;\n                uint end = start;\n                while (end < srcBytes.length && srcBytes[end] != '|' && srcBytes[end] != '\\n') end++;\n                bytes memory val = new bytes(end - start);\n                for (uint k = 0; k < end - start; k++) val[k] = srcBytes[start + k];\n                return string(val);\n            }\n        }\n        return \"\";\n    }\n\n    function getSignal(uint256 signalId) external view returns (Signal memory) {\n        return signals[signalId];\n    }\n\n    function getLatestSignal() external view returns (Signal memory) {\n        require(signalCount > 0, \"No signals yet\");\n        return signals[signalCount - 1];\n    }\n\n    receive() external payable {}\n}\n"
+      }
+    }
+  }
+}
