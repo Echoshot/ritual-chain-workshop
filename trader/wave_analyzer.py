@@ -61,7 +61,7 @@ sl = extract(analysis, "SL")
 tp1 = extract(analysis, "TP1")
 
 # Save to signal log
-timestamp = datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M")
+timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
 file_exists = os.path.exists(LOG_FILE)
 with open(LOG_FILE, "a", newline="") as f:
     writer = csv.writer(f)
