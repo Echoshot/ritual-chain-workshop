@@ -10,13 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Install jq
-        run: sudo apt-get install -y jq
       - name: Install Python deps
-        run: pip install web3 eth-account
+        run: pip install requests
       - name: Run Wave Analyzer
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
-        run: bash trader/wave_analyzer.sh
+        run: python3 trader/wave_analyzer.py
