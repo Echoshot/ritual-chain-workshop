@@ -106,7 +106,8 @@ def submit_onchain(gold_price):
         "from": account.address,
         "nonce": w3.eth.get_transaction_count(account.address),
         "gas": 300000,
-        "gasPrice": w3.eth.gas_price,
+        "maxFeePerGas": w3.eth.gas_price,
+        "maxPriorityFeePerGas": w3.eth.gas_price,
         "chainId": 1979,
     })
     print("DEBUG TX:", tx)
