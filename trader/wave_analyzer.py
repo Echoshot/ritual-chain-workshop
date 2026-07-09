@@ -89,3 +89,28 @@ Alternation Note: {alternation_note}
 """
 requests.post(WEBHOOK_URL, json={"content": message})
 print("Posted!")
+
+from web3 import Web3
+
+RPC_URL = "https://rpc.ritualfoundation.org"
+CONTRACT_ADDRESS = "0x0f31168ea1c03e807Af63198DE9e083Ccc644036"
+PRIVATE_KEY = os.environ.get("PRIVATE_KEY")
+
+def submit_onchain(gold_price):
+    w3 = Web3(Web3.HTTPProvider(RPC_URL))
+    with open("trader/gold_signal_abi.json") as f:
+        abi = json.load(f)
+    contract = w3.eth.contract(address=Web3.to_checksum_address(CONTRACT_ADDRESS), abi=abi)
+    account = w3.eth.account.from_key(PRIVATE_KEY)
+    tx = contract.functions.requestSignal(str(gold_price)).build_transaction({
+        "from": account.address,
+        "nonce": w3.eth.get_transaction_count(account.address),
+        "gas": 300000,
+        "gasPrice": w3.eth.gas_price,
+    })
+    signed = account.sign_transaction(tx)
+    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    print(f"On-chain tx sent: {tx_hash.hex()}")
+    return tx_hash.hex()
+
+submit_onchain(gold)
