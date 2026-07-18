@@ -13,7 +13,7 @@ if os.path.exists(LOG_FILE):
             recent = rows[-7:]
             history = "Previous signals:\n"
             for row in recent:
-                history += f"- {row[0]}: Price={row[1]}, Grade={row[2]}\n"
+                history += f"- {row[0]}: Price={row[1]}, Grade={row[2]}, WaveCount={row[9] if len(row) > 9 else 'N/A'}, Invalidation={row[11] if len(row) > 11 else 'N/A'}\n"
 
 r = requests.get("https://api.coinbase.com/v2/prices/XAU-USD/spot")
 gold = round(float(r.json()["data"]["amount"]), 2)
@@ -38,6 +38,12 @@ REASONING: 2-3 sentences referencing previous signals if available
 ALT_WAVE_COUNT: alternate wave estimate for primary count failure
 ALT_INVALIDATION: price level where primary count fails
 ALTERNATION_NOTE: one sentence on rule of alternation
+CORRECTION_STATUS: COMPLETE or IN PROGRESS.
+- If IN PROGRESS: do not issue an entry. Set SETUP_GRADE to "No Setup" and state specifically what needs to happen for completion (e.g. wave (c) reaching equal length with wave (a), or price reclaiming a specific level).
+- If COMPLETE: entry must be placed at or near the actual reversal point, with SL just beyond the correction'''s extreme -- not beyond the start of the prior impulse wave.
+COUNT_CONSISTENCY: Check {history} for the most recent primary wave count and its ALT_INVALIDATION level before proposing a new one.
+- If price has NOT closed beyond that invalidation level, retain the exact same primary wave count and wave number as the prior signal. Do not restate a new structure or renumber waves.
+- Only propose a new primary count if the prior invalidation level was actually breached, and state explicitly: "Prior count invalidated at [level] -- new primary count established."
 """
 
 r2 = requests.post("https://api.mistral.ai/v1/chat/completions",
@@ -45,6 +51,7 @@ r2 = requests.post("https://api.mistral.ai/v1/chat/completions",
     json={"model": "mistral-small-latest", "max_tokens": 600,
           "messages": [{"role": "user", "content": prompt}]})
 
+print("MISTRAL STATUS:", r2.status_code, "BODY:", r2.text[:1000])
 analysis = r2.json()["choices"][0]["message"]["content"]
 print("Analysis received")
 
@@ -93,7 +100,7 @@ print("Posted!")
 from web3 import Web3
 
 RPC_URL = "https://rpc.ritualfoundation.org"
-CONTRACT_ADDRESS = "0x0f31168ea1c03e807Af63198DE9e083Ccc644036"
+CONTRACT_ADDRESS = "0xf5e6459F1BBB029625716d6590275B8B4d768B36"
 PRIVATE_KEY = os.environ.get("PRIVATE_KEY")
 
 def submit_onchain(gold_price):

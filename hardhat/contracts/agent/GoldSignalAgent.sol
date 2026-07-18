@@ -1,29 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.20;
 
-interface ILLMPrecompile {
-    function requestInference(
-        string calldata model,
-        string calldata prompt,
-        uint256 maxTokens
-    ) external returns (bytes32 requestId);
-}
-
-interface IScheduler {
-    function schedule(
-        address target,
-        bytes calldata data,
-        uint256 intervalBlocks
-    ) external returns (bytes32 jobId);
-}
+import {PrecompileConsumer} from "../utils/PrecompileConsumer.sol";
 
 interface IRitualWallet {
     function deposit(uint256 lockDuration) external payable;
 }
 
-contract GoldSignalAgent {
-    address constant LLM = 0x0000000000000000000000000000000000000802;
-    address constant SCHEDULER = 0x0000000000000000000000000000000000000820;
+contract GoldSignalAgent is PrecompileConsumer {
     address constant RITUAL_WALLET = 0x0000000000000000000000000000000000000810;
 
     address public owner;
@@ -44,18 +28,15 @@ contract GoldSignalAgent {
         bool fulfilled;
     }
 
-    mapping(uint256 => Signal) public signals;
-    mapping(bytes32 => uint256) public requestToSignal;
+    struct ConvoHistory {
+        string platform;
+        string path;
+        string credsRef;
+    }
 
-    event SignalRequested(uint256 indexed signalId, bytes32 requestId, string goldPrice);
-    event SignalGenerated(
-        uint256 indexed signalId,
-        string bias,
-        string setupGrade,
-        string entry,
-        string stopLoss,
-        string waveCount
-    );
+    mapping(uint256 => Signal) public signals;
+
+    event SignalGenerated(uint256 indexed signalId, string bias, string setupGrade, string entry, string stopLoss, string waveCount);
     event AgentSpawned(address indexed agent, address indexed owner);
 
     constructor() payable {
@@ -68,30 +49,36 @@ contract GoldSignalAgent {
 
     function requestSignal(string calldata goldPrice) external returns (uint256) {
         uint256 id = signalCount++;
+        string memory prompt = buildPrompt(goldPrice);
+        string memory messagesJson = string(abi.encodePacked('[{"role":"user","content":"', prompt, '"}]'));
+
+        ConvoHistory memory convo = ConvoHistory("none", "", "");
+
+        bytes memory llmInput = _buildLLMInput(messagesJson, convo);
+
+        bytes memory output = _executePrecompile(LLM_INFERENCE_PRECOMPILE, llmInput);
+
+        (bool hasError, bytes memory completionData, , string memory errorMessage, ) =
+            abi.decode(output, (bool, bytes, bytes, string, ConvoHistory));
+        require(!hasError, errorMessage);
+
+        string memory raw = string(completionData);
         signals[id] = Signal({
             timestamp: block.timestamp,
             goldPrice: goldPrice,
-            bias: "",
-            setupGrade: "",
-            entry: "",
-            stopLoss: "",
-            tp1: "",
-            tp2: "",
-            tp3: "",
-            waveCount: "",
-            rawAnalysis: "",
-            fulfilled: false
+            bias: _extract(raw, "BIAS:"),
+            setupGrade: _extract(raw, "GRADE:"),
+            entry: _extract(raw, "ENTRY:"),
+            stopLoss: _extract(raw, "SL:"),
+            tp1: _extract(raw, "TP1:"),
+            tp2: _extract(raw, "TP2:"),
+            tp3: _extract(raw, "TP3:"),
+            waveCount: _extract(raw, "WAVE:"),
+            rawAnalysis: raw,
+            fulfilled: true
         });
 
-        string memory prompt = buildPrompt(goldPrice);
-        bytes32 reqId = ILLMPrecompile(LLM).requestInference(
-            "llama-3.1-8b",
-            prompt,
-            512
-        );
-
-        requestToSignal[reqId] = id;
-        emit SignalRequested(id, reqId, goldPrice);
+        emit SignalGenerated(id, signals[id].bias, signals[id].setupGrade, signals[id].entry, signals[id].stopLoss, signals[id].waveCount);
         return id;
     }
 
@@ -105,28 +92,6 @@ contract GoldSignalAgent {
             "Reply in this exact format only: ",
             "GRADE:A|BIAS:Bullish|WAVE:3of5|ENTRY:2650|SL:2620|TP1:2700|TP2:2750|TP3:2800"
         ));
-    }
-
-    function onResult(bytes32 requestId, bytes calldata result) external {
-        uint256 signalId = requestToSignal[requestId];
-        Signal storage s = signals[signalId];
-        require(!s.fulfilled, "Already fulfilled");
-
-        string memory raw = string(result);
-        s.rawAnalysis = raw;
-        s.fulfilled = true;
-
-        // Parse the structured response
-        s.setupGrade = _extract(raw, "GRADE:");
-        s.bias = _extract(raw, "BIAS:");
-        s.waveCount = _extract(raw, "WAVE:");
-        s.entry = _extract(raw, "ENTRY:");
-        s.stopLoss = _extract(raw, "SL:");
-        s.tp1 = _extract(raw, "TP1:");
-        s.tp2 = _extract(raw, "TP2:");
-        s.tp3 = _extract(raw, "TP3:");
-
-        emit SignalGenerated(signalId, s.bias, s.setupGrade, s.entry, s.stopLoss, s.waveCount);
     }
 
     function _extract(string memory src, string memory key) internal pure returns (string memory) {
@@ -156,6 +121,75 @@ contract GoldSignalAgent {
     function getLatestSignal() external view returns (Signal memory) {
         require(signalCount > 0, "No signals yet");
         return signals[signalCount - 1];
+    }
+
+        struct LLMRequestParams {
+        address field1;
+        bytes[] field2;
+        uint256 field3;
+        bytes[] field4;
+        bytes field5;
+        string field6;
+        string field7;
+        int256 field8;
+        string field9;
+        bool field10;
+        int256 field11;
+        string field12;
+        string field13;
+        uint256 field14;
+        bool field15;
+        int256 field16;
+        string field17;
+        bytes field18;
+        int256 field19;
+        string field20;
+        string field21;
+        bool field22;
+        int256 field23;
+        bytes field24;
+        bytes field25;
+        int256 field26;
+        int256 field27;
+        string field28;
+        bool field29;
+        ConvoHistory field30;
+    }
+
+    function _buildLLMInput(string memory messagesJson, ConvoHistory memory convo) internal pure returns (bytes memory) {
+        bytes[] memory emptyBytesArr = new bytes[](0);
+        LLMRequestParams memory p;
+        p.field1 = address(0);
+        p.field2 = emptyBytesArr;
+        p.field3 = uint256(0);
+        p.field4 = emptyBytesArr;
+        p.field5 = bytes("");
+        p.field6 = messagesJson;
+        p.field7 = "zai-org/GLM-4.7-FP8";
+        p.field8 = int256(0);
+        p.field9 = "";
+        p.field10 = false;
+        p.field11 = int256(512);
+        p.field12 = "";
+        p.field13 = "";
+        p.field14 = uint256(1);
+        p.field15 = false;
+        p.field16 = int256(0);
+        p.field17 = "";
+        p.field18 = bytes("");
+        p.field19 = int256(-1);
+        p.field20 = "";
+        p.field21 = "";
+        p.field22 = false;
+        p.field23 = int256(700);
+        p.field24 = bytes("");
+        p.field25 = bytes("");
+        p.field26 = int256(-1);
+        p.field27 = int256(1000);
+        p.field28 = "";
+        p.field29 = false;
+        p.field30 = convo;
+        return abi.encode(p);
     }
 
     receive() external payable {}
