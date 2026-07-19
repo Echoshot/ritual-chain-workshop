@@ -111,7 +111,7 @@ def submit_onchain(gold_price):
     account = w3.eth.account.from_key(PRIVATE_KEY)
     tx = contract.functions.requestSignal(str(gold_price)).build_transaction({
         "from": account.address,
-        "nonce": w3.eth.get_transaction_count(account.address),
+        "nonce": w3.eth.get_transaction_count(account.address, "pending"),
         "gas": 300000,
         "maxFeePerGas": w3.eth.gas_price,
         "maxPriorityFeePerGas": w3.eth.gas_price,
