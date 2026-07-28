@@ -100,7 +100,7 @@ print("Posted!")
 from web3 import Web3
 
 RPC_URL = "https://rpc.ritualfoundation.org"
-CONTRACT_ADDRESS = "0xf5e6459F1BBB029625716d6590275B8B4d768B36"
+CONTRACT_ADDRESS = "0x1D9618daa1f392c39E62712e89b59D41b27f9F7F"
 PRIVATE_KEY = os.environ.get("PRIVATE_KEY")
 
 def submit_onchain(gold_price):
