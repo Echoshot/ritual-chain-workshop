@@ -100,7 +100,8 @@ print("Posted!")
 from web3 import Web3
 
 RPC_URL = "https://rpc.ritualfoundation.org"
-CONTRACT_ADDRESS = "0x1D9618daa1f392c39E62712e89b59D41b27f9F7F"
+EXECUTOR = "0xb42e435c4252a5a2e7440e37b609f00c61a0c91b"
+CONTRACT_ADDRESS = "0xfBA96A93f9224c442222fa72a013AB715759e134"
 PRIVATE_KEY = os.environ.get("PRIVATE_KEY")
 
 def submit_onchain(gold_price):
@@ -109,7 +110,7 @@ def submit_onchain(gold_price):
         abi = json.load(f)
     contract = w3.eth.contract(address=Web3.to_checksum_address(CONTRACT_ADDRESS), abi=abi)
     account = w3.eth.account.from_key(PRIVATE_KEY)
-    tx = contract.functions.requestSignal(str(gold_price)).build_transaction({
+    tx = contract.functions.requestSignal(EXECUTOR, str(gold_price)).build_transaction({
         "from": account.address,
         "nonce": w3.eth.get_transaction_count(account.address, "pending"),
         "gas": 300000,

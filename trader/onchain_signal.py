@@ -3,7 +3,8 @@ from web3 import Web3
 from eth_account import Account
 
 RPC = "https://rpc.ritualfoundation.org"
-CONTRACT = "0x1D9618daa1f392c39E62712e8Fe69D41b2179F7E"
+EXECUTOR = Web3.to_checksum_address("0xec6a6c7ebd08616c805e18cdea6bf9c54950c77d")  # temporary, will improve later
+CONTRACT = "0xfBA96A93f9224c442222fa72a013AB715759e134"
 pk = os.environ.get("DEPLOYER_PRIVATE_KEY", "")
 gold = os.environ.get("GOLD_PRICE", "4039.00")
 
@@ -17,7 +18,7 @@ contract = w3.eth.contract(
     address=Web3.to_checksum_address(CONTRACT), abi=abi)
 
 nonce = w3.eth.get_transaction_count(acct.address)
-tx = contract.functions.requestSignal(gold).build_transaction({
+tx = contract.functions.requestSignal(EXECUTOR, gold).build_transaction({
     "from": acct.address,
     "nonce": nonce,
     "gas": 500000,

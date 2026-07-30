@@ -8,7 +8,7 @@ interface IRitualWallet {
 }
 
 contract GoldSignalAgent is PrecompileConsumer {
-    address constant RITUAL_WALLET = 0x0000000000000000000000000000000000000810;
+    address constant RITUAL_WALLET = 0x532F0dF0896F353d8C3DD8cc134e8129DA2a3948;
 
     address public owner;
     uint256 public signalCount;
@@ -41,20 +41,17 @@ contract GoldSignalAgent is PrecompileConsumer {
 
     constructor() payable {
         owner = msg.sender;
-        if (msg.value > 0) {
-            IRitualWallet(RITUAL_WALLET).deposit{value: msg.value}(30 days);
-        }
         emit AgentSpawned(address(this), msg.sender);
     }
 
-    function requestSignal(string calldata goldPrice) external returns (uint256) {
+    function requestSignal(address executor, string calldata goldPrice) external returns (uint256) {
         uint256 id = signalCount++;
         string memory prompt = buildPrompt(goldPrice);
         string memory messagesJson = string(abi.encodePacked('[{"role":"user","content":"', prompt, '"}]'));
 
-        ConvoHistory memory convo = ConvoHistory("none", "", "");
+        ConvoHistory memory convo = ConvoHistory("", "", "");
 
-        bytes memory llmInput = _buildLLMInput(messagesJson, convo);
+        bytes memory llmInput = _buildLLMInput(executor, messagesJson, convo);
 
         bytes memory output = _executePrecompile(LLM_INFERENCE_PRECOMPILE, llmInput);
 
@@ -156,10 +153,10 @@ contract GoldSignalAgent is PrecompileConsumer {
         ConvoHistory field30;
     }
 
-    function _buildLLMInput(string memory messagesJson, ConvoHistory memory convo) internal pure returns (bytes memory) {
+    function _buildLLMInput(address executor, string memory messagesJson, ConvoHistory memory convo) internal pure returns (bytes memory) {
         bytes[] memory emptyBytesArr = new bytes[](0);
         LLMRequestParams memory p;
-        p.field1 = address(0);
+        p.field1 = executor;  // TODO: replace with real executor
         p.field2 = emptyBytesArr;
         p.field3 = uint256(0);
         p.field4 = emptyBytesArr;
